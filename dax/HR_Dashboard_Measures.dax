@@ -1,0 +1,126 @@
+// ============================================================================
+// HR Analytics Dashboard — DAX Measures
+// Dataset: IBM HR Analytics Employee Attrition & Performance (1,470 records)
+// Paste each measure into Power BI Desktop: Home > New measure
+// ============================================================================
+
+// ---------------------------- KPI CARD MEASURES ----------------------------
+
+Total Employees =
+COUNTROWS ( 'Employees' )
+
+Attrition Count =
+CALCULATE (
+    COUNTROWS ( 'Employees' ),
+    'Employees'[Attrition] = "Yes"
+)
+
+Attrition Rate =
+DIVIDE (
+    [Attrition Count],
+    [Total Employees],
+    0
+)
+
+Average Monthly Income =
+AVERAGEX ( 'Employees', 'Employees'[MonthlyIncome] )
+
+Average Years at Company =
+AVERAGEX ( 'Employees', 'Employees'[YearsAtCompany] )
+
+Average Age =
+AVERAGEX ( 'Employees', 'Employees'[Age] )
+
+// ---------------------------- CONTEXT MEASURES -----------------------------
+
+Retained Employees =
+CALCULATE ( [Total Employees], 'Employees'[Attrition] = "No" )
+
+Overtime Employees =
+CALCULATE ( [Total Employees], 'Employees'[OverTime] = "Yes" )
+
+Overtime Attrition Rate =
+DIVIDE (
+    CALCULATE (
+        [Attrition Count],
+        'Employees'[OverTime] = "Yes"
+    ),
+    [Overtime Employees],
+    0
+)
+
+Non-Overtime Attrition Rate =
+DIVIDE (
+    CALCULATE (
+        [Attrition Count],
+        'Employees'[OverTime] = "No"
+    ),
+    CALCULATE ( [Total Employees], 'Employees'[OverTime] = "No" ),
+    0
+)
+
+// Attrition rate split by overtime — the single strongest driver in this dataset.
+// Overtime: 127 of 416 leavers = 30.5%   |   Non-overtime: 110 of 1,054 = 10.4%
+
+Department Attrition Rate =
+DIVIDE ( [Attrition Count], [Total Employees], 0 )
+
+High Attrition Flag =
+IF ( [Attrition Rate] >= 0.20, "High", IF ( [Attrition Rate] >= 0.12, "Medium", "Low" ) )
+
+// ---------------------------- RANKING MEASURES -----------------------------
+
+Attrition by Job Role =
+VAR CurrentRole = SELECTEDVALUE ( 'Employees'[JobRole] )
+RETURN
+    CALCULATE ( [Attrition Count], 'Employees'[JobRole] = CurrentRole )
+
+Top Role by Attrition =
+RANKX (
+    ALL ( 'Employees'[JobRole] ),
+    [Attrition Count],
+    ,
+    DESC,
+    DENSE
+)
+
+// ---------------------------- BANDING MEASURES -----------------------------
+
+Age Band =
+SELECTEDVALUE (
+    SWITCH (
+        TRUE (),
+        'Employees'[Age] < 25, "Under 25",
+        'Employees'[Age] <= 34, "25 - 34",
+        'Employees'[Age] <= 44, "35 - 44",
+        'Employees'[Age] <= 54, "45 - 54",
+        "55+"
+    )
+)
+
+Tenure Band =
+SWITCH (
+    TRUE (),
+    'Employees'[YearsAtCompany] < 2, "0-2 yrs",
+    'Employees'[YearsAtCompany] < 5, "3-4 yrs",
+    'Employees'[YearsAtCompany] < 10, "5-9 yrs",
+    'Employees'[YearsAtCompany] < 20, "10-19 yrs",
+    "20+ yrs"
+)
+
+Income Band =
+SWITCH (
+    TRUE (),
+    'Employees'[MonthlyIncome] < 3000, "Under 3K",
+    'Employees'[MonthlyIncome] < 6000, "3K - 6K",
+    'Employees'[MonthlyIncome] < 10000, "6K - 10K",
+    "10K+"
+)
+
+// ---------------------------- DISPLAY FORMATTING ----------------------------
+
+Attrition Rate % =
+FORMAT ( [Attrition Rate], "0.00%" )
+
+Average Income USD =
+FORMAT ( [Average Monthly Income], "$#,##0" )
