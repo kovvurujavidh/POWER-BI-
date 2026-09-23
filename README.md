@@ -2,7 +2,9 @@
 
 An interactive Power BI dashboard analysing employee attrition across **1,470 employee records** and **35 fields**, built to surface the workforce KPIs and turnover drivers that matter to HR decision-making.
 
-![Dashboard](docs/dashboard_preview.png)
+![HR Analytics Dashboard layout preview](docs/dashboard_preview.png)
+
+*Dashboard layout preview, rendered from the specification below. Build it in Power BI Desktop using the DAX and Power Query files in this repo.*
 
 ---
 
@@ -16,6 +18,7 @@ An interactive Power BI dashboard analysing employee attrition across **1,470 em
 - [How to Build the Dashboard](#how-to-build-the-dashboard)
 - [DAX Measures](#dax-measures)
 - [Dashboard Layout](#dashboard-layout)
+
 - [Technologies Used](#technologies-used)
 - [Author](#author)
 
@@ -82,7 +85,7 @@ POWER-BI-/
 │
 └── docs/
     ├── BUILD_GUIDE.md                 Step-by-step build instructions
-    └── dashboard_preview.png          Dashboard screenshot
+    └── dashboard_preview.png          Dashboard layout preview
 ```
 
 ---
