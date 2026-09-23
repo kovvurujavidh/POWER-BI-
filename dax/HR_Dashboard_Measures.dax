@@ -1,27 +1,262 @@
 // ============================================================================
-// HR Analytics Dashboard — DAX Measures
-// Dataset: IBM HR Analytics Employee Attrition & Performance (1,470 records)
-// Paste each measure into Power BI Desktop: Home > New measure
+// HR Analytics Dashboard — DAX Measure Library (Business KPI Framework)
+// ----------------------------------------------------------------------------
+// Dataset : IBM HR Analytics Employee Attrition & Performance (1,470 records)
+// Model   : Star schema (FactEmployee + 6 dimensions)  — see powerquery/
+// Paste   : Home > New measure, one block at a time
+//
+// MEASURE GROUPS
+//   [A] Volume & Workforce      [D] Comparative & Benchmark
+//   [B] Attrition KPIs          [E] Financial / Cost of Turnover
+//   [C] Diagnostic Drivers      [F] Risk Scoring & Ranking
+//
+// NOTE ON 'Employees' vs star schema:
+//   Flat model   -> 'Employees'[Column]
+//   Star schema  -> FactEmployee[Column]
+//   Global find/replace below if you used Star_Schema.m
 // ============================================================================
 
-// ---------------------------- KPI CARD MEASURES ----------------------------
 
-Total Employees =
+// ========================== [A] VOLUME & WORKFORCE ==========================
+
+Total Headcount =
 COUNTROWS ( 'Employees' )
 
-Attrition Count =
-CALCULATE (
-    COUNTROWS ( 'Employees' ),
-    'Employees'[Attrition] = "Yes"
-)
+Active Headcount =
+CALCULATE ( [Total Headcount], 'Employees'[Attrition Status] = "No" )
 
+Leaver Count =
+CALCULATE ( [Total Headcount], 'Employees'[Attrition Status] = "Yes" )
+
+// Headcount in the currently selected filter context — used as every denominator
+Workforce =
+[Total Headcount]
+
+Female Headcount =
+CALCULATE ( [Total Headcount], 'Employees'[Gender] = "Female" )
+
+Male Headcount =
+CALCULATE ( [Total Headcount], 'Employees'[Gender] = "Male" )
+
+
+// ========================== [B] ATTRITION KPIS ==============================
+
+// ---- Primary KPI. The number this whole dashboard exists for. -------------
 Attrition Rate =
+DIVIDE ( [Leaver Count], [Total Headcount], 0 )
+
+Retention Rate =
+DIVIDE ( [Active Headcount], [Total Headcount], 0 )
+
+// 12-month view when a date column exists:
+// Annualized Attrition = DIVIDE( [Leaver Count], [Average Headcount], 0 )
+
+// Voluntary vs involuntary — dataset does not distinguish, so we expose
+// a proxy: leavers who were NOT in their first year are likely voluntary.
+Early Attrition (0-1 yr) =
+CALCULATE ( [Leaver Count], 'Employees'[YearsAtCompany] < 1 )
+
+First-Year Attrition Rate =
+DIVIDE ( [Early Attrition (0-1 yr)], [Total Headcount], 0 )
+
+// Share of ALL leavers who left inside 2 years — the onboarding red flag
+Leaver Concentration (0-2 yrs) =
 DIVIDE (
-    [Attrition Count],
-    [Total Employees],
+    CALCULATE ( [Leaver Count], 'Employees'[YearsAtCompany] < 3 ),
+    [Leaver Count],
     0
 )
 
+
+// ========================== [C] DIAGNOSTIC DRIVERS ==========================
+
+// Overtime — the single strongest lever in this dataset (30.5% vs 10.4%)
+Overtime Headcount =
+CALCULATE ( [Total Headcount], 'Employees'[OverTime] = "Yes" )
+
+Overtime Attrition Rate =
+DIVIDE (
+    CALCULATE ( [Leaver Count], 'Employees'[OverTime] = "Yes" ),
+    [Overtime Headcount], 0
+)
+
+Non-Overtime Attrition Rate =
+DIVIDE (
+    CALCULATE ( [Leaver Count], 'Employees'[OverTime] = "No" ),
+    CALCULATE ( [Total Headcount], 'Employees'[OverTime] = "No" ), 0
+)
+
+// Multiplier — "overtime staff are Nx more likely to leave"
+Overtime Risk Multiple =
+DIVIDE ( [Overtime Attrition Rate], [Non-Overtime Attrition Rate] )
+
+// Pay gap between leavers and stayers (leavers avg $4,787 vs stayers $6,833)
+Average Income (Leavers) =
+AVERAGEX (
+    FILTER ( 'Employees', 'Employees'[Attrition Status] = "Yes" ),
+    'Employees'[MonthlyIncome]
+)
+
+Average Income (Stayers) =
+AVERAGEX (
+    FILTER ( 'Employees', 'Employees'[Attrition Status] = "No" ),
+    'Employees'[MonthlyIncome]
+)
+
+Pay Gap % =
+DIVIDE (
+    [Average Income (Stayers)] - [Average Income (Leavers)],
+    [Average Income (Stayers)],
+    0
+)
+
+// Stock options as a retention lever: 24.4% (level 0) vs 9.4% (level 1)
+No-Stock Attrition Rate =
+DIVIDE (
+    CALCULATE ( [Leaver Count], 'Employees'[StockOptionLevel] = 0 ),
+    CALCULATE ( [Total Headcount], 'Employees'[StockOptionLevel] = 0 ), 0
+)
+
+// Satisfaction drivers
+Low Job Satisfaction Rate =
+VAR LowHC =
+    CALCULATE ( [Total Headcount], 'Employees'[JobSatisfaction] = "Low" )
+RETURN
+    DIVIDE (
+        CALCULATE ( [Leaver Count], 'Employees'[JobSatisfaction] = "Low" ),
+        LowHC, 0
+    )
+
+
+// ========================== [D] COMPARATIVE & BENCHMARK =====================
+
+// Segment rate vs company baseline — the core "so what" measure.
+// Positive lift = this segment attrits MORE than the company average.
+Attrition Lift =
+VAR SegmentRate = [Attrition Rate]
+VAR CompanyRate =
+    CALCULATE ( [Attrition Rate], ALL ( 'Employees' ) )
+RETURN
+    SegmentRate - CompanyRate
+
+// Headline-flag version for conditional formatting / RAG status
+Attrition Flag =
+VAR R = [Attrition Rate]
+VAR Co = CALCULATE ( [Attrition Rate], ALL ( 'Employees' ) )
+RETURN
+    SWITCH (
+        TRUE (),
+        R >= Co * 1.5, "Critical",
+        R >= Co * 1.15, "Above Baseline",
+        R >= Co * 0.85, "On Baseline",
+        "Healthy"
+    )
+
+// % of total leavers — shows where the VOLUME sits (vs rate above)
+% of Total Leavers =
+DIVIDE (
+    [Leaver Count],
+    CALCULATE ( [Leaver Count], ALL ( 'Employees' ) ),
+    0
+)
+
+// Rank segments by attrition count (1 = worst)
+Attrition Rank =
+RANKX (
+    ALLSELECTED ( 'Employees'[JobRole] ),
+    [Leaver Count], , DESC, DENSE
+)
+
+// Benchmark percentile placeholder — wire to an HR target table if available
+vs Target Attrition Rate =
+VAR Target = 0.12   // industry benchmark ~12% for this profile
+RETURN
+    [Attrition Rate] - Target
+
+
+// ==================== [E] FINANCIAL / COST OF TURNOVER =====================
+
+// Turnover cost uses the standard HR rule of thumb:
+// replacement cost = 50%-200% of annual salary depending on seniority.
+// Default 100% — change the variable to model low/high scenarios.
+Turnover Cost per Leaver =
+VAR Multiplier = 1.0
+RETURN
+    AVERAGEX (
+        FILTER ( 'Employees', 'Employees'[Attrition Status] = "Yes" ),
+        'Employees'[AnnualIncome] * Multiplier
+    )
+
+Total Turnover Cost =
+SUMX (
+    FILTER ( 'Employees', 'Employees'[Attrition Status] = "Yes" ),
+    'Employees'[AnnualIncome] * 1.0
+)
+
+// Payroll exposure of the departing population
+Departing Payroll =
+SUMX (
+    FILTER ( 'Employees', 'Employees'[Attrition Status] = "Yes" ),
+    'Employees'[MonthlyIncome] * 12
+)
+
+Total Payroll =
+SUMX ( 'Employees', 'Employees'[MonthlyIncome] * 12 )
+
+% Payroll Lost =
+DIVIDE ( [Departing Payroll], [Total Payroll], 0 )
+
+
+// ===================== [F] RISK SCORING & RANKING ==========================
+// Composite early-warning score so HR can prioritise interventions.
+// Weights are explicit and auditable — tune them with your HR partner.
+
+Attrition Risk Score =
+VAR WOvertime  = IF ( 'Employees'[OverTime] = "Yes",                 35, 0 )
+VAR WTenure    = SWITCH ( TRUE (),
+                    'Employees'[YearsAtCompany] < 1, 25,
+                    'Employees'[YearsAtCompany] < 3, 18,
+                    'Employees'[YearsAtCompany] < 6, 8, 0 )
+VAR WLevel     = IF ( 'Employees'[JobLevel] = 1,                     15, 0 )
+VAR WStock     = IF ( 'Employees'[StockOptionLevel] = 0,             10, 0 )
+VAR WSat       = SWITCH ( TRUE (),
+                    'Employees'[JobSatisfaction] = "Low",             8,
+                    'Employees'[JobSatisfaction] = "Medium",          4, 0 )
+VAR WInvolvement = IF ( 'Employees'[JobInvolvement] = "Low",          7, 0 )
+RETURN
+    WOvertime + WTenure + WLevel + WStock + WSat + WInvolvement
+
+Risk Band =
+SWITCH (
+    TRUE (),
+    [Attrition Risk Score] >= 70, "Critical",
+    [Attrition Risk Score] >= 50, "High",
+    [Attrition Risk Score] >= 30, "Medium",
+    "Low"
+)
+
+Headcount at High Risk =
+CALCULATE (
+    [Total Headcount],
+    [Attrition Risk Score] >= 50
+)
+
+% Workforce at Risk =
+DIVIDE ( [Headcount at High Risk], [Total Headcount], 0 )
+
+
+// ========================== DISPLAY / FORMATTING ===========================
+
+Attrition Rate % =
+FORMAT ( [Attrition Rate], "0.0%" )
+
+Attrition Lift (pp) =
+FORMAT ( [Attrition Lift], "+0.0 pp;-0.0 pp;0.0 pp" )
+
+Avg Monthly Income USD =
+FORMAT ( [Average Monthly Income], "$#,##0" )
+
+// ---- helper measures used above -------------------------------------------
 Average Monthly Income =
 AVERAGEX ( 'Employees', 'Employees'[MonthlyIncome] )
 
@@ -30,97 +265,3 @@ AVERAGEX ( 'Employees', 'Employees'[YearsAtCompany] )
 
 Average Age =
 AVERAGEX ( 'Employees', 'Employees'[Age] )
-
-// ---------------------------- CONTEXT MEASURES -----------------------------
-
-Retained Employees =
-CALCULATE ( [Total Employees], 'Employees'[Attrition] = "No" )
-
-Overtime Employees =
-CALCULATE ( [Total Employees], 'Employees'[OverTime] = "Yes" )
-
-Overtime Attrition Rate =
-DIVIDE (
-    CALCULATE (
-        [Attrition Count],
-        'Employees'[OverTime] = "Yes"
-    ),
-    [Overtime Employees],
-    0
-)
-
-Non-Overtime Attrition Rate =
-DIVIDE (
-    CALCULATE (
-        [Attrition Count],
-        'Employees'[OverTime] = "No"
-    ),
-    CALCULATE ( [Total Employees], 'Employees'[OverTime] = "No" ),
-    0
-)
-
-// Attrition rate split by overtime — the single strongest driver in this dataset.
-// Overtime: 127 of 416 leavers = 30.5%   |   Non-overtime: 110 of 1,054 = 10.4%
-
-Department Attrition Rate =
-DIVIDE ( [Attrition Count], [Total Employees], 0 )
-
-High Attrition Flag =
-IF ( [Attrition Rate] >= 0.20, "High", IF ( [Attrition Rate] >= 0.12, "Medium", "Low" ) )
-
-// ---------------------------- RANKING MEASURES -----------------------------
-
-Attrition by Job Role =
-VAR CurrentRole = SELECTEDVALUE ( 'Employees'[JobRole] )
-RETURN
-    CALCULATE ( [Attrition Count], 'Employees'[JobRole] = CurrentRole )
-
-Top Role by Attrition =
-RANKX (
-    ALL ( 'Employees'[JobRole] ),
-    [Attrition Count],
-    ,
-    DESC,
-    DENSE
-)
-
-// ---------------------------- BANDING MEASURES -----------------------------
-
-Age Band =
-SELECTEDVALUE (
-    SWITCH (
-        TRUE (),
-        'Employees'[Age] < 25, "Under 25",
-        'Employees'[Age] <= 34, "25 - 34",
-        'Employees'[Age] <= 44, "35 - 44",
-        'Employees'[Age] <= 54, "45 - 54",
-        "55+"
-    )
-)
-
-Tenure Band =
-SWITCH (
-    TRUE (),
-    'Employees'[YearsAtCompany] < 2, "0-2 yrs",
-    'Employees'[YearsAtCompany] < 5, "3-4 yrs",
-    'Employees'[YearsAtCompany] < 10, "5-9 yrs",
-    'Employees'[YearsAtCompany] < 20, "10-19 yrs",
-    "20+ yrs"
-)
-
-Income Band =
-SWITCH (
-    TRUE (),
-    'Employees'[MonthlyIncome] < 3000, "Under 3K",
-    'Employees'[MonthlyIncome] < 6000, "3K - 6K",
-    'Employees'[MonthlyIncome] < 10000, "6K - 10K",
-    "10K+"
-)
-
-// ---------------------------- DISPLAY FORMATTING ----------------------------
-
-Attrition Rate % =
-FORMAT ( [Attrition Rate], "0.00%" )
-
-Average Income USD =
-FORMAT ( [Average Monthly Income], "$#,##0" )

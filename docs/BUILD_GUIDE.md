@@ -27,11 +27,18 @@ Estimated build time: **45–60 minutes**.
 ## Step 2 — Apply Transformations
 
 1. In Power Query Editor: **Home → Advanced Editor**
-2. Delete existing contents, paste in `HR_Data_Transformation.m`
+2. Delete existing contents, paste in the query you want
 3. Edit the `File.Contents(...)` path to your local clone
 4. **Home → Close & Apply**
 
-### What the query does
+### Which query?
+
+| Query | Choose it when |
+|---|---|
+| `powerquery/HR_Data_Transformation.m` | Single flat table — fastest to stand up |
+| `powerquery/Star_Schema.m` | Full dimensional model — **recommended**, see below |
+
+### What the flat query does
 
 | Step | Action |
 |------|--------|
@@ -40,9 +47,34 @@ Estimated build time: **45–60 minutes**.
 | *Labeled | Converts 1–5 survey codes into `Low / Medium / High / Very High` |
 | AddAnnualIncome | `MonthlyIncome × 12` |
 | AddAgeBand / AddTenureBand | Bins for charting |
-| CheckedRows | Errors if row count ≠ 1,470 |
+| CheckedRows | **Errors if row count ≠ 1,470** |
 
-> **Important:** rename the final query to **`Employees`** — the DAX measures reference `'Employees'[...]`.
+> ⚠️ **Important:** rename the final query to **`Employees`** — the DAX
+> measures reference `'Employees'[...]`.
+
+### If you used the star schema
+
+Rename the fact table to `FactEmployee`, then globally replace `'Employees'`
+with `FactEmployee` in `HR_Dashboard_Measures.dax`.
+
+Set relationships in **Model view** — Power BI cannot infer them automatically
+because the dimensions are derived, not looked up:
+
+| From | To | Cardinality | Cross-filter |
+|---|---|---|---|
+| `DimDepartment[Department]` | `FactEmployee[Department]` | 1 → * | Single |
+| `DimJobRole[JobRole]` | `FactEmployee[JobRole]` | 1 → * | Single |
+| `DimTenureBand[TenureBand]` | `FactEmployee[TenureBand]` | 1 → * | Single |
+| `DimIncomeBand[IncomeBand]` | `FactEmployee[IncomeBand]` | 1 → * | Single |
+| `DimAgeBand[AgeBand]` | `FactEmployee[AgeBand]` | 1 → * | Single |
+| `DimOvertime[OverTime]` | `FactEmployee[OverTime]` | 1 → * | Single |
+
+For each dimension, set its `SortOrder` column as **Sort by column** for the
+band field so slicers and axes sort correctly.
+
+**Why star schema?** Slicer performance (descriptive text stored once per
+member, not repeated across 1,470 rows), correct `ALL()` baseline behaviour in
+the lift measures, and no ambiguous filter paths.
 
 ---
 
@@ -130,15 +162,42 @@ Arrange in a left-hand vertical strip, **Slicer → Selection → Single select:
 
 ## Validation Checklist
 
-Confirm these before publishing:
+Confirm these before publishing — every value is computed from the source data,
+so a mismatch means something is wired up wrong:
 
-- [ ] Row count = **1,470** (query assertion passes)
-- [ ] Attrition Rate KPI shows **16.12%**
-- [ ] Overtime donut shows 127 leavers / 416 overtime staff
+**Data integrity**
+- [ ] Row count = **1,470** (query assertion passes — errors if not)
+- [ ] `FactEmployee` (or `Employees`) has **237** rows where `Attrition = Yes`
+- [ ] Model view shows **no** "invalid identifier" or ambiguous relationship warnings
+- [ ] All 6 dimension relationships are **single-direction**
+
+**Headline KPIs**
+- [ ] Total Headcount = **1,470**
+- [ ] Attrition Rate = **16.12%**
+- [ ] Retention Rate = **83.88%**
 - [ ] Avg Monthly Income ≈ **$6,503**
 - [ ] Avg Years at Company ≈ **7.01**
+
+**Driver measures**
+- [ ] Overtime Attrition Rate = **30.5%** (127 of 416)
+- [ ] Non-Overtime Attrition Rate = **10.4%** (110 of 1,054)
+- [ ] Overtime Risk Multiple ≈ **2.9×**
+- [ ] Average Income (Stayers) ≈ **$6,833** / (Leavers) ≈ **$4,787**
+- [ ] Pay Gap % ≈ **29.9%**
+- [ ] Sales Representative rate = **39.8%** (+23.7 pp lift)
+- [ ] `<1 yr` tenure band rate = **36.4%**
+
+**Financial measures**
+- [ ] Total Turnover Cost ≈ **$13.6M** at 1.0× multiplier
+- [ ] Cost per Leaver ≈ **$57,444**
+- [ ] % Payroll Lost ≈ **11.8%**
+
+**Behaviour**
 - [ ] Slicers cross-filter all visuals
-- [ ] No "invalid identifier" errors in the model view
+- [ ] Clicking *Sales* in the department bar updates every other visual
+- [ ] With a slicer selecting an empty combination, no `#DIV/0!` appears
+- [ ] Attrition Lift shows `+`/`−` in **pp**, not `%`
+- [ ] Tenure bands sort `<1 yr → 20+` (not alphabetically)
 
 ---
 
@@ -147,7 +206,11 @@ Confirm these before publishing:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `Employee[Attrition]` invalid identifier | Query not named `Employees` | Rename query |
+| `FactEmployee[...]` invalid identifier | Used star schema but didn't replace refs | Global replace `'Employees'` → `FactEmployee` |
+| Slicers do nothing / no filter effect | Relationship missing or wrong direction | Model view → set 1→* , Single |
 | Division by zero errors | Used `/` instead of `DIVIDE` | Use `DIVIDE` measures |
 | Percentages display as `0.16` | Measure format not set | Format → Percentage → 2 decimals |
+| Lift shows `23.7%` not `+23.7 pp` | Custom format missing | Apply `Attrition Lift (pp)` format string |
 | Band chart out of order | Text sort | Column tools → Sort by column |
+| Row-count assertion fails | Edited or swapped CSV | Restore the original 1,470-row file |
 | Row count assertion fails | Wrong/edited CSV | Restore original 1,470-row file |

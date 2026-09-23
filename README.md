@@ -1,69 +1,163 @@
-# HR Analytics Dashboard — Power BI
+# HR Analytics Dashboard — Workforce Attrition Analysis
 
-An interactive Power BI dashboard analysing employee attrition across **1,470 employee records** and **35 fields**, built to surface the workforce KPIs and turnover drivers that matter to HR decision-making.
+An interactive Power BI dashboard analysing **employee attrition across 1,470
+employees and 35 fields**, built to answer one business question: *why are 237
+people leaving, and what should we fix first?*
 
-![HR Analytics Dashboard layout preview](docs/dashboard_preview.png)
+![HR Analytics Dashboard — Workforce Attrition](docs/dashboard_preview.png)
 
-*Dashboard layout preview, rendered from the specification below. Build it in Power BI Desktop using the DAX and Power Query files in this repo.*
+*Dashboard layout rendered from the specification in this repo. Build it in
+Power BI Desktop using the DAX and Power Query files provided — see
+[docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md).*
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Key Findings](#key-findings)
-- [KPIs](#kpis)
+- [The Headline](#the-headline)
+- [Five Findings That Matter](#five-findings-that-matter)
+- [KPI Framework](#kpi-framework)
 - [Repository Structure](#repository-structure)
-- [Dataset](#dataset)
-- [How to Build the Dashboard](#how-to-build-the-dashboard)
-- [DAX Measures](#dax-measures)
-- [Dashboard Layout](#dashboard-layout)
-
-- [Technologies Used](#technologies-used)
+- [Data Model](#data-model)
+- [How to Build It](#how-to-build-it)
+- [Documentation](#documentation)
+- [Technologies](#technologies)
+- [Limitations](#limitations)
 - [Author](#author)
 
 ---
 
-## Overview
+## The Headline
 
-Employee turnover is one of the most expensive operational problems a company faces. This project takes the raw IBM HR attrition dataset and turns it into a single-page interactive dashboard that lets an HR business partner answer, in seconds:
+| KPI | Value |
+|---|---|
+| **Total Headcount** | **1,470** |
+| **Attrition Rate** | **16.12%** (237 leavers) |
+| **Overtime Risk Multiple** | **2.9×** (30.5% vs 10.4%) |
+| **Avg Monthly Income** | **$6,503** |
+| **Avg Years at Company** | **7.01** |
+| **Estimated Turnover Cost** | **$13.6M / yr** |
 
-- How many people are we losing, and at what rate?
-- Which departments and job roles are bleeding talent?
-- Does overtime actually drive attrition?
-- Where do leavers sit by tenure, income and satisfaction?
-
-All charts are cross-filtered — clicking a department card filters every other visual on the page.
-
----
-
-## Key Findings
-
-Findings computed directly from the dataset in this repository:
-
-| # | Finding | Numbers |
-|---|---------|---------|
-| 1 | **Overall attrition is 16.12%** | 237 of 1,470 employees left |
-| 2 | **Overtime is the single strongest driver** | Overtime staff attrit at **30.5%** (127/416) vs **10.4%** (110/1,054) without — roughly **3x higher** |
-| 3 | **Research & Development carries the most volume** | 961 employees, 133 left (13.8%) |
-| 4 | **Sales has the highest departmental rate** | 446 employees, 92 left (**20.6%**) |
-| 5 | **Human Resources is small but risky** | 63 employees, 12 left (19.0%) |
-| 6 | Average tenure of leavers is low | Average years at company: **7.01**; average age **36.9** |
-
-> **Headline insight:** overtime is where the leverage is. Nearly 1 in 3 employees working overtime leave, versus 1 in 10 who don't. Scheduling and workload balancing should be the first retention lever HR pulls.
+> Attrition is 16.12% and **not evenly distributed**. Three segments —
+> employees on **overtime**, staff with **under two years' tenure**, and
+> **entry-level role families** — account for the majority of losses. Two of
+> the three levers are cheap and fast to pull.
 
 ---
 
-## KPIs
+## Five Findings That Matter
 
-The four KPI cards on the dashboard front page:
+### 1. Overtime is the dominant — and most actionable — driver
 
-| KPI | Value | DAX |
-|-----|-------|-----|
-| Total Employees | **1,470** | `COUNTROWS('Employees')` |
-| Attrition Rate | **16.12%** | `[Attrition Count] / [Total Employees]` |
-| Avg Monthly Income | **$6,503** | `AVERAGEX('Employees', 'Employees'[MonthlyIncome])` |
-| Avg Years at Company | **7.01** | `AVERAGEX('Employees', 'Employees'[YearsAtCompany])` |
+| Segment | Headcount | Leavers | Attrition |
+|---|---|---|---|
+| Works overtime | 416 | 127 | **30.5%** |
+| Does not | 1,054 | 110 | **10.4%** |
+
+A **2.9× risk multiple.** This matters most because overtime is a *scheduling
+decision* — it can change next quarter, unlike pay bands or job architecture.
+
+**Critical pocket:** R&D Laboratory Technicians on overtime show **50%
+attrition (31 of 62)**.
+
+### 2. This is an early-tenure problem
+
+| Tenure | <1 yr | 1–2 | 3–5 | 6–10 | 11–20 | 20+ |
+|---|---|---|---|---|---|---|
+| Attrition | **36.4%** | **28.9%** | 17.2% | 10.1% | 6.2% | 3.4% |
+
+Risk falls smoothly and steeply with tenure. **~56% of all leavers exit within
+their first three years** — so this is an onboarding problem far more than a
+late-career engagement problem.
+
+### 3. Rate vs volume — two different questions
+
+| By rate *(where to intervene)* | Rate | Lift |
+|---|---|---|
+| Sales Representative | **39.8%** | **+23.7 pp** |
+| Laboratory Technician | 23.9% | +7.8 pp |
+| Human Resources | 23.1% | +7.0 pp |
+| Research Director | 2.5% | −13.6 pp |
+
+| By volume *(where the damage is)* | Leavers | Share |
+|---|---|---|
+| Research & Development | 133 | 56.1% |
+| Sales | 92 | 38.8% |
+| Human Resources | 12 | 5.1% |
+
+Sales Reps have the worst *rate* — fix that role. R&D carries the most
+*volume* — that's where headcount is bleeding. Optimising one view alone
+misallocates the retention budget.
+
+### 4. Compensation structure, not individual pay
+
+| | Avg monthly income |
+|---|---|
+| Stayers | **$6,833** |
+| Leavers | **$4,787** |
+
+Leavers earn **29.9% less** — but role level confounds this. The honest
+reading: the organisation is shedding its *cheaper* employees. They are 16.1%
+of headcount but only **~11.8% of payroll**.
+
+> **Correlation, not causation.** Claiming causation would require external
+> market benchmarks and a controlled comparison.
+
+### 5. Stock options are the second-cheapest lever
+
+| Stock option level | 0 (none) | 1 | 2 | 3 |
+|---|---|---|---|---|
+| Attrition | **24.4%** | 9.4% | 4.1% | 0.0% |
+
+A **~15-point spread** between level 0 and level 1.
+
+---
+
+## KPI Framework
+
+Six measure groups, **30+ DAX measures**, fully documented in
+[docs/KPI_DICTIONARY.md](docs/KPI_DICTIONARY.md):
+
+| Group | Measures | Purpose |
+|---|---|---|
+| **A. Volume & Workforce** | Headcount, Active, Leavers, Female/Male | Denominators for every rate |
+| **B. Attrition KPIs** | Attrition Rate, Retention Rate, First-Year Rate, Leaver Concentration | Headline health |
+| **C. Diagnostic Drivers** | Overtime Rate & Multiple, Pay Gap %, Stock Option Rate | *Why* people leave |
+| **D. Comparative & Benchmark** | Attrition Lift, RAG Flag, % of Total Leavers, Rank, vs Target | The "so what" |
+| **E. Financial** | Turnover Cost, Departing Payroll, % Payroll Lost | Money on the number |
+| **F. Risk Scoring** | Attrition Risk Score (0–100), Risk Band, % at Risk | Forward-looking early warning |
+
+### Two design decisions worth knowing
+
+**`DIVIDE` instead of `/`** — when a slicer empties the table, `/` throws
+`#DIV/0!` in the middle of a stakeholder demo. `DIVIDE` returns the alternate
+value and the card stays clean.
+
+**Percentage points, not percent** — `Attrition Lift` is a *difference* between
+two percentages, so it renders as `+23.7 pp`. A small detail that signals
+statistical literacy.
+
+### The risk score
+
+```dax
+Attrition Risk Score =
+VAR WOvertime    = IF ( 'Employees'[OverTime] = "Yes",                35, 0 )
+VAR WTenure      = SWITCH ( TRUE (),
+                    'Employees'[YearsAtCompany] < 1, 25,
+                    'Employees'[YearsAtCompany] < 3, 18,
+                    'Employees'[YearsAtCompany] < 6,  8, 0 )
+VAR WLevel       = IF ( 'Employees'[JobLevel] = 1,                    15, 0 )
+VAR WStock       = IF ( 'Employees'[StockOptionLevel] = 0,            10, 0 )
+VAR WSat         = SWITCH ( TRUE (),
+                    'Employees'[JobSatisfaction] = "Low",    8,
+                    'Employees'[JobSatisfaction] = "Medium", 4, 0 )
+VAR WInvolvement = IF ( 'Employees'[JobInvolvement] = "Low",           7, 0 )
+RETURN WOvertime + WTenure + WLevel + WStock + WSat + WInvolvement
+```
+
+Weights are **explicit and auditable** — max 100, each weight a stated
+assumption an HR partner can challenge. The rate measures are backward-looking
+(who already left); the score is forward-looking (who is *about* to).
 
 ---
 
@@ -71,144 +165,123 @@ The four KPI cards on the dashboard front page:
 
 ```
 POWER-BI-/
-│
-├── README.md                          ← you are here
-│
+├── README.md                          You are here
 ├── data/
 │   └── HR_Employee_Attrition.csv      Raw dataset — 1,470 rows × 35 columns
-│
 ├── powerquery/
-│   └── HR_Data_Transformation.m       Power Query (M): load, clean, label, derive
-│
+│   ├── HR_Data_Transformation.m        Flat-model cleaning query
+│   └── Star_Schema.m                   Fact + 6 dimension tables
 ├── dax/
-│   └── HR_Dashboard_Measures.dax      All KPI, context and banding measures
-│
+│   └── HR_Dashboard_Measures.dax       30+ measures across 6 groups
 └── docs/
-    ├── BUILD_GUIDE.md                 Step-by-step build instructions
-    └── dashboard_preview.png          Dashboard layout preview
+    ├── KPI_DICTIONARY.md              Every KPI: formula, value, how to explain it
+    ├── EXECUTIVE_SUMMARY.md           Business findings & ranked recommendations
+    ├── DATA_DICTIONARY.md             All 35 columns, types, meanings, drops
+    ├── INTERVIEW_GUIDE.md             60-second pitch + likely questions & answers
+    ├── BUILD_GUIDE.md                 Visual-by-visual build instructions
+    ├── dashboard_preview.png          Dashboard layout render
+    └── _make_preview.py               Regenerates the preview image
 ```
 
 ---
 
-## Dataset
+## Data Model
 
-| Attribute | Value |
-|-----------|-------|
-| Source | IBM HR Analytics Employee Attrition & Performance (via Kaggle) |
-| Records | 1,470 employees |
-| Columns | 35 |
-| Target variable | `Attrition` (Yes / No) |
-| Leavers | 237 (16.12%) |
-| Retained | 1,233 (83.88%) |
+Star schema rather than a single flat table — for slicer performance, correct
+`ALL()` baseline behaviour, and to prevent ambiguous filter paths:
 
-**Columns removed during cleaning** — all constant, zero analytical signal:
+```
+DimDepartment ─┐
+DimJobRole    ─┤
+DimTenureBand ─┼── FactEmployee ── DimDate (when dates are available)
+DimIncomeBand ─┤
+DimAgeBand    ─┤
+DimOvertime   ─┘
+```
 
-| Column | Constant value | Why dropped |
-|--------|----------------|-------------|
-| `EmployeeCount` | `1` | Never varies |
-| `StandardHours` | `80` | Never varies |
-| `Over18` | `Y` | Never varies |
-| `HourlyRate` / `DailyRate` / `MonthlyRate` | Redundant | Income already captured by `MonthlyIncome` |
+| Table | Grain | Rows |
+|---|---|---|
+| `FactEmployee` | one row per employee | 1,470 |
+| `DimDepartment` / `DimJobRole` / `DimTenureBand` / `DimIncomeBand` / `DimAgeBand` / `DimOvertime` | one row per member | 3 / 9 / 6 / 5 / 5 / 2 |
 
-**Coded fields converted to readable labels:**
+All relationships are **single-direction** (dim → fact).
 
-| Field | Coding |
-|-------|--------|
-| Education | 1 Below College → 5 Doctor |
-| EnvironmentSatisfaction / JobSatisfaction / JobInvolvement | 1 Low → 4 Very High |
-| WorkLifeBalance | 1 Bad → 4 Best |
-| PerformanceRating | 3 Excellent, 4 Outstanding |
+**Cleaning:** 6 columns dropped — `EmployeeCount`, `StandardHours`, `Over18`
+(constants, zero variance) and `HourlyRate`, `DailyRate`, `MonthlyRate`
+(redundant with `MonthlyIncome`). Kept `PercentSalaryHike`: it measures raise
+*magnitude*, a different concept from pay *level*.
+
+**Data-quality gate:** the Power Query ends in a row-count assertion — if the
+source ever isn't 1,470 rows, the query **errors loudly** instead of silently
+producing wrong KPIs.
 
 ---
 
-## How to Build the Dashboard
+## How to Build It
 
 Requires [Power BI Desktop](https://powerbi.microsoft.com/desktop/) (free, Windows).
 
-**1. Load the data**
+1. **Get data → Text/CSV** → `data/HR_Employee_Attrition.csv` → *Transform Data*
+2. **Advanced Editor** → paste `powerquery/HR_Data_Transformation.m` (flat) or
+   `powerquery/Star_Schema.m` (dimensional) → *Close & Apply*
+3. **New measure** → paste each block from `dax/HR_Dashboard_Measures.dax`
+4. Build visuals per [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md)
+5. **Format → Edit interactions** → enable cross-filtering
 
-Power BI Desktop → **Home → Get data → Text/CSV** → select `data/HR_Employee_Attrition.csv` → **Transform Data**.
-
-**2. Apply the transformations**
-
-In Power Query Editor: **Home → Advanced Editor** → replace contents with `powerquery/HR_Data_Transformation.m`.
-
-Update the file path in the `Source` step to match your local clone. **Close & Apply**.
-
-> The query ends with a row-count assertion (1,470). If it ever errors, the source data changed.
-
-**3. Create the measures**
-
-**Home → New measure**, then paste each block from `dax/HR_Dashboard_Measures.dax`. Rename the query to `Employees` so the measure references resolve.
-
-**4. Build the visuals**
-
-Follow [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md) for the exact visual-by-visual layout, field wells and formatting.
-
-**5. Add cross-filtering**
-
-Select each visual → **Format → Edit interactions** → ensure cards and charts filter one another. Clicking *Sales* should filter every visual on the page.
+Full walkthrough, including field wells, formatting and troubleshooting:
+**[docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md)**
 
 ---
 
-## DAX Measures
+## Documentation
 
-Highlights from [`dax/HR_Dashboard_Measures.dax`](dax/HR_Dashboard_Measures.dax):
-
-```dax
-Attrition Rate =
-DIVIDE ( [Attrition Count], [Total Employees], 0 )
-```
-
-```dax
-Overtime Attrition Rate =
-DIVIDE (
-    CALCULATE ( [Attrition Count], 'Employees'[OverTime] = "Yes" ),
-    [Overtime Employees],
-    0
-)
-```
-
-```dax
-High Attrition Flag =
-IF ( [Attrition Rate] >= 0.20, "High",
-    IF ( [Attrition Rate] >= 0.12, "Medium", "Low" ) )
-```
-
-`DIVIDE` is used throughout rather than `/` — it safely returns 0 on division-by-zero instead of raising an error, which matters when a slicer filters a card down to an empty table.
+| Doc | What it gives you |
+|---|---|
+| **[KPI_DICTIONARY.md](docs/KPI_DICTIONARY.md)** | Every KPI — definition, DAX, actual value, *and how to explain it* |
+| **[EXECUTIVE_SUMMARY.md](docs/EXECUTIVE_SUMMARY.md)** | Stakeholder-ready findings and 6 ranked recommendations with cost/impact |
+| **[DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** | All 35 columns, ordinal label mappings, dropped columns, star schema, DQ checks |
+| **[INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md)** | 60-second pitch, STAR structure, 10 likely questions with answers, numbers to memorise |
+| **[BUILD_GUIDE.md](docs/BUILD_GUIDE.md)** | Step-by-step build with validation checklist and troubleshooting table |
 
 ---
 
-## Dashboard Layout
-
-Single page, three rows:
-
-| Row | Visuals | Purpose |
-|-----|---------|---------|
-| **1** | 4 KPI cards — Employees, Attrition Rate, Avg Income, Avg Years | Headline health |
-| **2** | Attrition by Department (bar) · Attrition % by Job Role (bar) · Attrition by OverTime (donut) | Where the leak is |
-| **3** | Attrition by Tenure Band (column) · Avg Income by Attrition (clustered) · Satisfaction breakdown (matrix) | Why they leave |
-| **Filters** | Department, Job Role, Gender, Education, OverTime slicers | Interactive drill-down |
-
----
-
-## Technologies Used
+## Technologies
 
 - **Power BI Desktop** — data modelling and report authoring
-- **Power Query (M)** — data cleaning, type casting, derived columns
-- **DAX** — KPI measures, context transition, ranking and banding
-- **SQL concepts** — `GROUP BY`, aggregate and conditional logic (mirrored in the companion [HR-Analytics-SQL](https://github.com/kovvurujavidh/HR-Analytics-SQL) repo)
-- **Microsoft Excel** — source analysis in the companion [HR-Analytics-Excel-Dashboard](https://github.com/kovvurujavidh/HR-Analytics-Excel-Dashboard) repo
+- **Power Query (M)** — cleaning, type casting, banding, star schema, row-count guard
+- **DAX** — KPI measures, context transition, `DIVIDE`, `RANKX`, `SWITCH`, risk scoring
+- **SQL** — `GROUP BY`, aggregate and conditional logic (companion [HR-Analytics-SQL](https://github.com/kovvurujavidh/HR-Analytics-SQL) repo)
+- **Excel** — source analysis (companion [HR-Analytics-Excel-Dashboard](https://github.com/kovvurujavidh/HR-Analytics-Excel-Dashboard) repo)
 
----
-
-## Related Projects
+### Related Projects
 
 | Project | Tool |
-|---------|------|
+|---|---|
 | [HR-Analytics-Excel-Dashboard](https://github.com/kovvurujavidh/HR-Analytics-Excel-Dashboard) | Excel, Pivot Tables, Slicers |
 | [HR-Analytics-SQL](https://github.com/kovvurujavidh/HR-Analytics-SQL) | MySQL |
 | **This repo** | Power BI, DAX, Power Query |
+
+---
+
+## Limitations
+
+Stated openly, because credibility depends on it:
+
+1. **No dates.** There is no hire/termination date column, so genuine
+   time-series and YoY trends cannot be computed. A true 12-month annualised
+   rate with average headcount as denominator isn't possible from this source.
+2. **Voluntary vs involuntary not distinguished.** The dataset only records
+   `Attrition = Yes/No`, so regretted-loss analysis isn't possible.
+3. **Correlation ≠ causation.** The pay-gap and satisfaction findings are
+   associations in observational data with no control group.
+4. **Turnover cost is modelled, not measured.** The 1.0× replacement
+   multiplier is an explicit, tunable parameter (0.5× → $6.8M, 2.0× → $27.2M).
+5. **Risk-score weights are assumptions.** Transparent and intended to be
+   retuned with an HR partner.
+6. **`PerformanceRating` has no values of 1 or 2.** Everyone is rated Excellent
+   or Outstanding — near-zero variance, so it should not be used as a driver.
+7. **Synthetic data.** IBM released this as a fictional sample — figures are
+   methodologically sound but are not a real company's results.
 
 ---
 
@@ -225,4 +298,5 @@ Data / MIS Analyst — Excel · SQL · Power BI · Data Visualization
 
 ## License
 
-Dataset © IBM (fictional sample data, released for educational use). Dashboard code in this repository is open for learning and reuse.
+Dataset © IBM (fictional sample data, released for educational use). Dashboard
+code in this repository is open for learning and reuse.
